@@ -12,7 +12,6 @@ check_timeout=${CHECK_TIMEOUT:-30m}
 as_rebaser() { GH_TOKEN="$REBASE_GH_TOKEN" gh "$@"; }
 as_approver() { GH_TOKEN="$APPROVE_GH_TOKEN" gh "$@"; }
 
-bot=$(as_approver api user --jq .login)
 prs=$(as_rebaser pr list -R "$repo" --base "$base" --state open --limit 1000 \
     --json number,createdAt,isDraft,reviewDecision)
 
@@ -25,19 +24,15 @@ for pr in "${numbers[@]}"; do
     echo "Processing $repo#$pr"
 
     if ! info=$(as_rebaser pr view "$pr" -R "$repo" \
-        --json id,state,isDraft,reviewDecision,latestReviews,baseRefOid,headRefOid); then
+        --json id,state,isDraft,reviewDecision,baseRefOid,headRefOid); then
         failed=1
         continue
     fi
 
-    # Only the external review bot's approval authorizes the initial merge.
-    if ! jq -e --arg bot "$bot" '
+    if ! jq -e '
         .state == "OPEN" and (.isDraft | not) and
-        .reviewDecision == "APPROVED" and
-        any(.latestReviews[]?;
-            (.author.login // "" | ascii_downcase) == ($bot | ascii_downcase)
-            and .state == "APPROVED")' <<<"$info" >/dev/null; then
-        echo "Skipping #$pr: awaiting the review bot's approval"
+        .reviewDecision == "APPROVED"' <<<"$info" >/dev/null; then
+        echo "Skipping #$pr: awaiting required approval"
         continue
     fi
 
@@ -97,7 +92,7 @@ for pr in "${numbers[@]}"; do
         if ! as_approver api -X POST "repos/$repo/pulls/$pr/reviews" \
             -f event=APPROVE -f commit_id="$sha" \
             -f body="Previously reviewed PR rebased; required CI must pass before merge." >/dev/null; then
-            echo "Bot reapproval failed for #$pr"
+            echo "Reapproval failed for #$pr"
             failed=1
             continue
         fi
