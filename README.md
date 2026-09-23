@@ -10,7 +10,7 @@ Once a PR has the required GitHub approval, the worker processes approved PRs ol
 2. Add Actions secrets in **each calling repository**:
    - `REBASE_GH_TOKEN`: your personal-account token with Contents and Pull requests **read/write** on the calling repository.
    - `APPROVE_GH_TOKEN`: a separate approver's token with Contents and Pull requests **read/write** on the same repository. The account needs appropriate repository access and must be eligible to approve the rebased PR (it cannot be the PR author or the account that made the latest reviewable push).
-3. Copy [examples/caller.yml](examples/caller.yml) to `.github/workflows/merge.yml` in each repository and replace `@main` with a released tag (such as `@v1`) or a pinned full commit SHA **after this repository's initial PR is merged and released**.
+3. After publishing the first release as `v1`, copy [examples/caller.yml](examples/caller.yml) to `.github/workflows/merge.yml` in each repository. It references `dstoc/merge-action/.github/workflows/merge.yml@v1`.
 4. Any eligible reviewer can provide the initial approval. An approval event starts the worker. A push to `main` also triggers queue processing; use `workflow_dispatch` for manual recovery.
 
 For public repositories, standard GitHub-hosted Actions runners are free. The calling workflows execute on trusted workflow definitions; the worker never checks out untrusted PR code and does not expose tokens to PR scripts.
