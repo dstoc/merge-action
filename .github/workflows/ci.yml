@@ -1,0 +1,22 @@
+name: Validate
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n .github/actions/merge/merge-worker.sh
+      - name: Check workflow and action YAML
+        run: |
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true) }' \
+            .github/actions/merge/action.yml \
+            .github/workflows/merge.yml \
+            .github/workflows/ci.yml \
+            examples/caller.yml
