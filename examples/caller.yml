@@ -17,7 +17,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request_review' ||
       github.event.review.state == 'approved'
-    uses: dstoc/merge-action/.github/workflows/merge.yml@main
+    uses: dstoc/merge-action/.github/workflows/merge.yml@v1
     with:
       base-branch: main
     secrets:
