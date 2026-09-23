@@ -2,7 +2,7 @@
 
 A serial, event-driven merge worker for personal GitHub repositories without native merge queues.
 
-An external reviewer first approves a PR **as the bot**. The worker processes approved PRs oldest-first, rebases outdated branches as your personal account, waits for required CI, reapproves the rebased head as the bot, and squash-merges with a head-SHA guard. If CI, rebase, approval or merge fails, it skips the PR and continues with the remaining queue.
+An external reviewer first approves a PR **as the bot**. The worker processes approved PRs oldest-first, rebases outdated branches as your personal account, immediately reapproves the rebased head as the bot, waits for required CI, and squash-merges with a head-SHA guard. If CI, rebase, approval or merge fails, it skips the PR and continues with the remaining queue.
 
 ## Setup
 
@@ -19,7 +19,7 @@ For public repositories, standard GitHub-hosted Actions runners are free. The ca
 
 - The initial approval must be from the account identified by `APPROVE_GH_TOKEN`. Ordinary PR approvals by others do not authorize this worker.
 - A rebase is only attempted when the PR is behind the target branch. It uses GitHub's GraphQL branch-update mutation with `expectedHeadOid` to reject concurrent head changes.
-- After a successful rebase, the worker waits for required CI, then submits a REST review with `commit_id` set to the rebased head. Without a rebase, the initial bot approval remains in force.
+- After a successful rebase, the worker immediately submits a REST review with `commit_id` set to the rebased head, then waits for required CI. If CI fails or times out, the approval persists for the next run. Without a rebase, the initial bot approval remains in force.
 - The merge uses `gh pr merge --squash --match-head-commit`. Repository rules enforce approvals, checks, and the up-to-date base.
 - A failed PR is reported and skipped; the remaining PRs are attempted. A failing run returns a nonzero exit status. A periodic run retries recoverable failures.
 - Trigger concurrency must be defined in each caller; GitHub concurrency groups are scoped to each repository.
