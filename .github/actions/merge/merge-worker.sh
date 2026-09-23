@@ -91,6 +91,18 @@ for pr in "${numbers[@]}"; do
         fi
     fi
 
+    # Reapprove the exact rebased commit before waiting for CI. If CI fails,
+    # the review persists, allowing the next worker run to retry the checks.
+    if [[ $rebased == true ]]; then
+        if ! as_approver api -X POST "repos/$repo/pulls/$pr/reviews" \
+            -f event=APPROVE -f commit_id="$sha" \
+            -f body="Previously reviewed PR rebased; required CI must pass before merge." >/dev/null; then
+            echo "Bot reapproval failed for #$pr"
+            failed=1
+            continue
+        fi
+    fi
+
     echo "Waiting for required CI on #$pr ($sha)"
     if ! GH_TOKEN="$REBASE_GH_TOKEN" timeout "$check_timeout" \
         gh pr checks "$pr" -R "$repo" --required --watch --fail-fast; then
@@ -104,24 +116,13 @@ for pr in "${numbers[@]}"; do
         failed=1
         continue
     fi
-    if ! jq -e --arg sha "$sha" --argjson rebased "$rebased" '
+    if ! jq -e --arg sha "$sha" '
         .headRefOid == $sha and .state == "OPEN" and (.isDraft | not)
-        and (.reviewDecision != "CHANGES_REQUESTED")
-        and ($rebased or .reviewDecision == "APPROVED")
+        and .reviewDecision == "APPROVED"
         ' <<<"$current" >/dev/null; then
         echo "PR #$pr changed or review was blocked during CI"
         failed=1
         continue
-    fi
-
-    if [[ $rebased == true ]]; then
-        if ! as_approver api -X POST "repos/$repo/pulls/$pr/reviews" \
-            -f event=APPROVE -f commit_id="$sha" \
-            -f body="Previously approved PR rebased; required CI passed." >/dev/null; then
-            echo "Bot reapproval failed for #$pr"
-            failed=1
-            continue
-        fi
     fi
 
     # The ruleset must also require an up-to-date branch: --match-head-commit
