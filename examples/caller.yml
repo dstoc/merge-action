@@ -1,0 +1,25 @@
+name: Merge queue
+
+on:
+  pull_request_review:
+    types: [submitted]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: merge-worker
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  merge:
+    if: >-
+      github.event_name != 'pull_request_review' ||
+      github.event.review.state == 'approved'
+    uses: dstoc/merge-action/.github/workflows/merge.yml@v1
+    with:
+      base-branch: main
+    secrets:
+      REBASE_GH_TOKEN: ${{ secrets.REBASE_GH_TOKEN }}
+      APPROVE_GH_TOKEN: ${{ secrets.APPROVE_GH_TOKEN }}

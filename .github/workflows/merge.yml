@@ -1,0 +1,33 @@
+name: Serial merge worker
+
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        type: string
+        required: false
+        default: main
+      check-timeout:
+        type: string
+        required: false
+        default: 30m
+    secrets:
+      REBASE_GH_TOKEN:
+        required: true
+      APPROVE_GH_TOKEN:
+        required: true
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    steps:
+      - name: Process approved PRs
+        uses: $/.github/actions/merge
+        with:
+          rebase-token: ${{ secrets.REBASE_GH_TOKEN }}
+          approve-token: ${{ secrets.APPROVE_GH_TOKEN }}
+          base-branch: ${{ inputs.base-branch }}
+          check-timeout: ${{ inputs.check-timeout }}

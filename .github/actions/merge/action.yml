@@ -1,0 +1,27 @@
+name: "Serial merge worker"
+description: "Rebase approved PRs, wait for CI, reapprove rebased commits, and squash-merge serially"
+inputs:
+  rebase-token:
+    description: "Personal-account token for rebases and CI reads"
+    required: true
+  approve-token:
+    description: "Separate review-bot token for SHA-specific approvals and merges"
+    required: true
+  base-branch:
+    description: "Target branch"
+    default: "main"
+  check-timeout:
+    description: "Maximum wait for required checks per PR"
+    default: "30m"
+runs:
+  using: composite
+  steps:
+    - name: Merge approved pull requests
+      shell: bash
+      env:
+        REBASE_GH_TOKEN: ${{ inputs.rebase-token }}
+        APPROVE_GH_TOKEN: ${{ inputs.approve-token }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        CHECK_TIMEOUT: ${{ inputs.check-timeout }}
+        MERGE_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$MERGE_ACTION_PATH/merge-worker.sh"
