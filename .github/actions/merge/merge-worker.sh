@@ -22,9 +22,8 @@ dismiss_approvals() {
 
     mapfile -t review_ids < <(jq -r '
         add
-        | sort_by(.submitted_at)
         | group_by(.user.login)
-        | map(last)
+        | map(max_by(.submitted_at))
         | .[]
         | select(.state == "APPROVED")
         | .id' <<<"$reviews")
