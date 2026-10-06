@@ -1,11 +1,8 @@
 name: "Serial merge worker"
-description: "Rebase approved PRs, wait for CI, reapprove rebased commits, and squash-merge serially"
+description: "Rebase approved PRs, wait for CI, and squash-merge serially"
 inputs:
   rebase-token:
-    description: "Personal-account token for rebases and CI reads"
-    required: true
-  approve-token:
-    description: "Separate review-bot token for SHA-specific approvals and merges"
+    description: "Personal-account token for rebases, review dismissal, CI reads, and merges"
     required: true
   base-branch:
     description: "Target branch"
@@ -20,7 +17,6 @@ runs:
       shell: bash
       env:
         REBASE_GH_TOKEN: ${{ inputs.rebase-token }}
-        APPROVE_GH_TOKEN: ${{ inputs.approve-token }}
         BASE_BRANCH: ${{ inputs.base-branch }}
         CHECK_TIMEOUT: ${{ inputs.check-timeout }}
         MERGE_ACTION_PATH: ${{ github.action_path }}
