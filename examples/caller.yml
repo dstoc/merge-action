@@ -22,4 +22,3 @@ jobs:
       base-branch: main
     secrets:
       REBASE_GH_TOKEN: ${{ secrets.REBASE_GH_TOKEN }}
-      APPROVE_GH_TOKEN: ${{ secrets.APPROVE_GH_TOKEN }}

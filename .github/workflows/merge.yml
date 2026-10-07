@@ -14,8 +14,6 @@ on:
     secrets:
       REBASE_GH_TOKEN:
         required: true
-      APPROVE_GH_TOKEN:
-        required: true
 
 jobs:
   merge:
@@ -28,6 +26,5 @@ jobs:
         uses: $/.github/actions/merge
         with:
           rebase-token: ${{ secrets.REBASE_GH_TOKEN }}
-          approve-token: ${{ secrets.APPROVE_GH_TOKEN }}
           base-branch: ${{ inputs.base-branch }}
           check-timeout: ${{ inputs.check-timeout }}

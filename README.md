@@ -2,14 +2,12 @@
 
 A serial, event-driven merge worker for personal GitHub repositories without native merge queues.
 
-Once a PR has the required GitHub approval, the worker processes approved PRs oldest-first, rebases outdated branches with `REBASE_GH_TOKEN`, immediately reapproves the rebased head with `APPROVE_GH_TOKEN`, waits for required CI, and squash-merges with a head-SHA guard. If CI, rebase, approval or merge fails, it skips the PR and continues with the remaining queue.
+Once a PR has the required GitHub approval, the worker processes approved PRs oldest-first, rebases outdated branches with `REBASE_GH_TOKEN`, waits for required CI, and squash-merges with a head-SHA guard. GitHub's stale-review policy decides whether an approval remains valid after a successful rebase. If an outdated PR conflicts with the base branch, the worker dismisses its current approvals so conflict resolution requires a fresh review.
 
 ## Setup
 
-1. Configure the [expected GitHub branch protections](#github-branch-protection) on the target branch, including **exactly one required approval**, the latest-push approval requirement, and required CI checks against an up-to-date base.
-2. Add Actions secrets in **each calling repository**:
-   - `REBASE_GH_TOKEN`: your personal-account token with Contents and Pull requests **read/write** on the calling repository.
-   - `APPROVE_GH_TOKEN`: a separate approver's token with Contents and Pull requests **read/write** on the same repository. The account needs appropriate repository access and must be eligible to approve the rebased PR (it cannot be the PR author or the account that made the latest reviewable push).
+1. Configure the [expected GitHub branch protections](#github-branch-protection) on the target branch, including **exactly one required approval**, stale approval dismissal, and required CI checks against an up-to-date base.
+2. Add `REBASE_GH_TOKEN` as an Actions secret in **each calling repository**. It is a personal-account token with Contents and Pull requests **read/write** on the calling repository. The account must also be allowed to dismiss reviews if review dismissal is restricted.
 3. After publishing the first release as `v1`, copy [examples/caller.yml](examples/caller.yml) to `.github/workflows/merge.yml` in each repository. It references `dstoc/merge-action/.github/workflows/merge.yml@v1`.
 4. Any eligible reviewer can provide the initial approval. An approval event starts the worker. A push to `main` also triggers queue processing; use `workflow_dispatch` for manual recovery.
 
@@ -25,12 +23,12 @@ Configure an active branch ruleset under **Settings → Rules → Rulesets**, ta
 | --- | --- |
 | Require a pull request before merging | Enabled |
 | Required approvals | **Exactly 1** |
-| Require approval of the most recent reviewable push | Enabled |
+| Dismiss stale pull request approvals when new commits are pushed | **Enabled** |
 | Require status checks to pass | Enabled |
 | Require branches to be up to date before merging | Enabled |
 | Required status checks | Your build, test, and other independent CI checks |
 
-The worker submits one approval after rebasing. Requiring exactly one approval means that this reapproval is sufficient for the approval-count rule, provided the approving account is eligible. A higher approval count may require additional reviewers after a rebase. GitHub continues to enforce every branch rule when the worker attempts to merge.
+GitHub records the reviewed diff and invalidates an approval when an update changes the reviewed state. The worker does not replace an approval that GitHub dismisses after rebasing; that PR waits for another human approval.
 
 **Do not require the merge-worker workflow itself as a status check.** Only require the independent checks that validate the PR. The up-to-date requirement is essential: `--match-head-commit` protects against a changed PR head, not a concurrent update to `main`.
 
@@ -38,14 +36,12 @@ The worker submits one approval after rebasing. Requiring exactly one approval m
 
 | Setting | Value | Reason |
 | --- | --- | --- |
-| Dismiss stale pull request approvals when new commits are pushed | Disabled | The worker reapproves after rebasing; the latest-push approval rule remains enabled. |
+| Require approval of the most recent reviewable push | Disabled | Stale-review dismissal is the approval policy; requiring last-push approval can independently require another review after the worker rebases. |
 | Require conversation resolution before merging | Enabled | Prevent merging with unresolved review discussions. |
 | Block force pushes | Enabled | Protect the target branch. |
-| Bypass permissions | None for the worker accounts | Ensure automated merges are subject to the same rules. |
+| Bypass permissions | None for the worker account | Ensure automated merges are subject to the same rules. |
 
-The account behind `APPROVE_GH_TOKEN` must be eligible to approve the PR and must differ from the author and the account that made the most recent reviewable push. The worker uses `REBASE_GH_TOKEN` for branch updates and `APPROVE_GH_TOKEN` for reapproval.
-
-A clean rebase is not proof that a change remains semantically equivalent. Reapproving after a successful rebase is part of this workflow's trust model, not an independent code review.
+If review dismissal is restricted, the account behind `REBASE_GH_TOKEN` must be included in the allowed users/apps. The same token performs branch updates, dismisses approvals on conflicts, reads CI state, and merges.
 
 ### Repository settings
 
@@ -55,11 +51,12 @@ GitHub's native merge queue and auto-merge features are not required. The worker
 
 ## Behavior
 
-- Any approval that satisfies the repository's required-review rules can authorize the worker; no particular initial reviewer is required. GitHub enforces reviewer eligibility and latest-push approval requirements.
+- Any approval that satisfies the repository's required-review rules can authorize the worker; no particular initial reviewer is required. GitHub enforces reviewer eligibility.
 - A rebase is only attempted when the PR is behind the target branch. It uses GitHub's GraphQL branch-update mutation with `expectedHeadOid` to reject concurrent head changes.
-- After a successful rebase, the worker immediately submits a REST review with `commit_id` set to the rebased head, then waits for required CI. If CI fails or times out, the approval persists for the next run. Without a rebase, the existing approval remains in force.
+- After a successful rebase, the worker does **not** submit another approval. GitHub's stale-review rules determine whether the existing approval is still valid. If it is dismissed, the worker leaves the PR waiting for another human review.
+- If an outdated PR has merge conflicts, the worker dismisses its current effective approvals with the reason `Rebase conflict detected; approval must be renewed after conflict resolution.` It also checks again after a failed rebase in case GitHub only reports the conflict then.
 - The merge uses `gh pr merge --squash --match-head-commit`. Repository rules enforce approvals, checks, and the up-to-date base.
-- A failed PR is reported and skipped; the remaining PRs are attempted. A failing run returns a nonzero exit status. With no scheduled polling, retry a failed run manually or rely on the next approval or push to `main`.
+- A PR that simply needs renewed approval is skipped without making the worker run fail. Operational failures such as API errors, CI failures/timeouts, or merge failures are reported and cause a nonzero worker exit after the remaining queue entries are attempted.
 - Trigger concurrency must be defined in each caller; GitHub concurrency groups are scoped to each repository.
 
 ## Calling the reusable workflow
@@ -72,15 +69,15 @@ jobs:
     uses: dstoc/merge-action/.github/workflows/merge.yml@v1
     secrets:
       REBASE_GH_TOKEN: ${{ secrets.REBASE_GH_TOKEN }}
-      APPROVE_GH_TOKEN: ${{ secrets.APPROVE_GH_TOKEN }}
 ```
 
 You can also use the standalone composite action in a normal job with
-`uses: dstoc/merge-action/.github/actions/merge@v1`; pass inputs `rebase-token` and `approve-token`. The reusable workflow references the action at its **exact running commit** via GitHub's `$/` syntax, so the two versions cannot drift.
+`uses: dstoc/merge-action/.github/actions/merge@v1`; pass the `rebase-token` input. The reusable workflow references the action at its **exact running commit** via GitHub's `$/` syntax, so the two versions cannot drift.
 
 ## Limitations
 
-- A clean rebase does not prove semantic equivalence. Auto-reapproval applies to PRs that already satisfy GitHub's required-review rules; the worker deliberately does not compare pre/post-rebase patches. GitHub rejects an ineligible approver or a merge that violates branch rules.
+- Review dismissal requires the `REBASE_GH_TOKEN` account to have permission to dismiss reviews. If a ruleset restricts dismissal, explicitly allow that account.
+- A clean rebase is not proof of semantic equivalence. The worker deliberately delegates approval invalidation to GitHub's stale-review policy rather than comparing pre/post-rebase patches itself.
 - The worker is a serial queue, not a speculative merge train. It uses GitHub's actual required checks and ruleset as the final merge gate.
 - The script expects `gh`, `jq`, `timeout`, and Bash (available on `ubuntu-latest`). It uses GitHub.com GraphQL rebase support and the self-repository `$/` syntax (not GitHub Enterprise Server).
 - No cron schedule is configured. Approval and `main` push events trigger runs; `workflow_dispatch` enables manual retries.
