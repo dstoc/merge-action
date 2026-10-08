@@ -3,6 +3,8 @@ name: Merge queue
 on:
   pull_request_review:
     types: [submitted]
+  pull_request:
+    types: [auto_merge_enabled, synchronize]
   push:
     branches: [main]
   workflow_dispatch:
@@ -13,7 +15,7 @@ concurrency:
   queue: max
 
 jobs:
-  merge:
+  advance:
     if: >-
       github.event_name != 'pull_request_review' ||
       github.event.review.state == 'approved'
@@ -21,4 +23,4 @@ jobs:
     with:
       base-branch: main
     secrets:
-      REBASE_GH_TOKEN: ${{ secrets.REBASE_GH_TOKEN }}
+      PR_GH_TOKEN: ${{ secrets.PR_GH_TOKEN }}

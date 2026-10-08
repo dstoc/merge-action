@@ -1,4 +1,4 @@
-name: Serial merge worker
+name: Advance auto-merge queue
 
 on:
   workflow_call:
@@ -7,24 +7,19 @@ on:
         type: string
         required: false
         default: main
-      check-timeout:
-        type: string
-        required: false
-        default: 30m
     secrets:
-      REBASE_GH_TOKEN:
+      PR_GH_TOKEN:
         required: true
 
 jobs:
-  merge:
+  advance:
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Process approved PRs
+      - name: Advance auto-merge queue
         uses: $/.github/actions/merge
         with:
-          rebase-token: ${{ secrets.REBASE_GH_TOKEN }}
+          pr-token: ${{ secrets.PR_GH_TOKEN }}
           base-branch: ${{ inputs.base-branch }}
-          check-timeout: ${{ inputs.check-timeout }}
