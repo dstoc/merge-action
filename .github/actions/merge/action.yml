@@ -1,23 +1,19 @@
-name: "Serial merge worker"
-description: "Rebase approved PRs, wait for CI, and squash-merge serially"
+name: "Advance auto-merge queue"
+description: "Rebase the oldest approved auto-merge PR onto the target branch"
 inputs:
-  rebase-token:
-    description: "Personal-account token for rebases, review dismissal, CI reads, and merges"
+  pr-token:
+    description: "Fine-grained PAT with Pull requests read/write"
     required: true
   base-branch:
     description: "Target branch"
     default: "main"
-  check-timeout:
-    description: "Maximum wait for required checks per PR"
-    default: "30m"
 runs:
   using: composite
   steps:
-    - name: Merge approved pull requests
+    - name: Advance auto-merge queue
       shell: bash
       env:
-        REBASE_GH_TOKEN: ${{ inputs.rebase-token }}
+        PR_GH_TOKEN: ${{ inputs.pr-token }}
         BASE_BRANCH: ${{ inputs.base-branch }}
-        CHECK_TIMEOUT: ${{ inputs.check-timeout }}
         MERGE_ACTION_PATH: ${{ github.action_path }}
       run: bash "$MERGE_ACTION_PATH/merge-worker.sh"
